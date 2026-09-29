@@ -9,15 +9,13 @@ export async function POST(req) {
       return Response.json({ error: "缺少 Authorization" }, { status: 401 });
     }
 
-    const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
-    // 读取前端传过来的请求JSON
+    // ✅ 工作流 run 接口，不是 chat-messages
+    const DIFY_API_URL = "https://api.dify.ai/v1/workflows/run";
+
     let body = await req.json();
 
-    // 适配：前端带inputs包裹，后端自动剥离，提取到外层，兼容Dify chat‑messages接口
-    if (body.inputs) {
-      body = { ...body, ...body.inputs };
-      delete body.inputs;
-    }
+    // ✅ 这里不删 inputs！保持 inputs 结构原样送给 Dify 工作流
+    // 前端传过来是什么，直接转发
 
     const difyRes = await fetch(DIFY_API_URL, {
       method: "POST",
@@ -35,9 +33,8 @@ export async function POST(req) {
 
     return new Response(difyRes.body, {
       headers: {
-        "Content-Type": "text/event-stream",
+        "Content-Type": "application/json",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
       },
     });
 
