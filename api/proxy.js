@@ -1,45 +1,37 @@
 export const config = {
-  runtime: "nodejs",
+  runtime: "edge",
 };
 
-export async function POST(req) {
+export default async function handler(req) {
+  // 只处理 POST 请求
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
   try {
-    const auth = req.headers.get("authorization");
-    if (!auth) {
-      return Response.json({ error: "缺少 Authorization" }, { status: 401 });
+    // 从 Vercel 环境变量读取密钥，密钥不在代码里面
+    const DIFY_API_KEY = process.env.DIFY_API_KEY;
+    if (!DIFY_API_KEY) {
+      return Response.json({ error: "缺少 DIFY_API_KEY 环境变量" }, { status: 500 });
     }
 
-    // ✅ 聊天应用，使用 chat-messages
-    const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
-    let body = await req.json();
+    // 拿到前端传过来的 body
+    const body = await req.json();
 
-    // ✅ 把 inputs 里面的 query 提取到外层，删掉 inputs
-    if (body.inputs?.query) {
-      body.query = body.inputs.query;
-      delete body.inputs;
-    }
-
-    const difyRes = await fetch(DIFY_API_URL, {
+    // Dify 工作流 run 接口
+    const difyRes = await fetch("https://api.dify.ai/v1/workflows/run", {
       method: "POST",
       headers: {
-        Authorization: auth,
+        Authorization: `Bearer ${DIFY_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
     });
 
-    const text = await difyRes.text();
-    if (!difyRes.ok) {
-      return Response.json({
-        error: "Dify 返回错误",
-        detail: text
-      }, { status: difyRes.status });
-    }
-
-    // blocking 模式返回普通 json，不是 sse 流
-    return Response.json(JSON.parse(text));
-
+    // 原样透传 Dify 返回给前端
+    const difyData = await difyRes.json();
+    return Response.json(difyData, { status: difyRes.status });
   } catch (err) {
-    return Response.json({ error: "代理异常", msg: err.message }, { status: 500 });
+    return Response.json({ error: err.message }, { status: 500 });
   }
 }
