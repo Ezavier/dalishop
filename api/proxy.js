@@ -1,53 +1,48 @@
 export const config = {
-  runtime: "nodejs",
-  api: {
-    bodyParser: false,
-    responseLimit: false,
-  },
+  runtime: "nodejs"
 };
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.status(405).send("Method not allowed");
-    return;
-  }
-
+export async function POST(req) {
   try {
-    const auth = req.headers.authorization;
+    const auth = req.headers.get("authorization");
     if (!auth) {
-      res.status(401).json({ error: "缺少 Authorization" });
-      return;
+      return Response.json({ error: "缺少 Authorization" }, { status: 401 });
     }
 
     const DIFY_API_URL = "https://api.dify.ai/v1/workflows/run";
 
-    const response = await fetch(DIFY_API_URL, {
+    // 获取原始 body 二进制流
+    const bodyBuffer = await req.arrayBuffer();
+
+    const difyRes = await fetch(DIFY_API_URL, {
       method: "POST",
       headers: {
         Authorization: auth,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: req,
+      body: bodyBuffer
     });
 
-    // SSE 流式头
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-
-    // 管道流转发，不会卡住
-    const reader = response.body.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
+    if (!difyRes.ok) {
+      const text = await difyRes.text();
+      console.error("Dify 后端报错：", text);
+      return Response.json({ error: "Dify 返回错误", detail: text }, { status: difyRes.status });
     }
-    res.end();
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      error: "proxy 代理调用失败",
-      detail: err.message,
+
+    // 直接把 Dify 的 ReadableStream 返回给前端
+    return new Response(difyRes.body, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive"
+      }
     });
+
+  } catch (err) {
+    console.error("proxy 异常：", err);
+    return Response.json(
+      { error: "proxy 代理调用失败", detail: err.message },
+      { status: 500 }
+    );
   }
 }
