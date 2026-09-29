@@ -9,13 +9,15 @@ export async function POST(req) {
       return Response.json({ error: "缺少 Authorization" }, { status: 401 });
     }
 
-    // ✅ 工作流 run 接口，不是 chat-messages
-    const DIFY_API_URL = "https://api.dify.ai/v1/workflows/run";
-
+    // ✅ 聊天应用，使用 chat-messages
+    const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
     let body = await req.json();
 
-    // ✅ 这里不删 inputs！保持 inputs 结构原样送给 Dify 工作流
-    // 前端传过来是什么，直接转发
+    // ✅ 把 inputs 里面的 query 提取到外层，删掉 inputs
+    if (body.inputs?.query) {
+      body.query = body.inputs.query;
+      delete body.inputs;
+    }
 
     const difyRes = await fetch(DIFY_API_URL, {
       method: "POST",
@@ -26,17 +28,16 @@ export async function POST(req) {
       body: JSON.stringify(body),
     });
 
+    const text = await difyRes.text();
     if (!difyRes.ok) {
-      const text = await difyRes.text();
-      return Response.json({ error: "Dify 返回错误", detail: text }, { status: difyRes.status });
+      return Response.json({
+        error: "Dify 返回错误",
+        detail: text
+      }, { status: difyRes.status });
     }
 
-    return new Response(difyRes.body, {
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-      },
-    });
+    // blocking 模式返回普通 json，不是 sse 流
+    return Response.json(JSON.parse(text));
 
   } catch (err) {
     return Response.json({ error: "代理异常", msg: err.message }, { status: 500 });
