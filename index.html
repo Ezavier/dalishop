@@ -1096,7 +1096,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
       req = fetch(DIFY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': DIFY_AUTH },
-        body: JSON.stringify({ query: payloadQuery, response_mode: 'blocking', user: DIFY_USER });
+        body: JSON.stringify({ inputs: { query: payloadQuery }, response_mode: 'blocking', user: DIFY_USER });
     }catch(e){ fail(); return; }
     if (!req || typeof req.then !== 'function'){ fail(); return; }
     req.then(function(resp){
